@@ -8,92 +8,57 @@
 #
 ######################################
 
-import requests
-from collections import defaultdict
-from datetime import datetime, timedelta
-import time
+from datetime import datetime
 from prettytable import PrettyTable, TableStyle
 import argparse
 
 from hiveengine.api import Api
 from hiveengine.market import Market
 
+# Import configs
+from config import DEFAULT_ACCOUNT, DEFAULT_TOKENS
+
+# Import our utility functions
+from hive_engine_utils import (
+    debug_log as util_debug_log,
+    get_token_holdings,
+    get_market_info,
+    get_hive_price_usd,
+    get_btc_price_usd,
+    validate_username,
+    validate_token,
+    fetch_all_tokens,
+    clear_caches
+)
+
+# Import diesel pool functions
+from diesel_pools import (
+    get_user_pool_portfolio,
+    display_diesel_pools_table,
+    set_debug_mode
+)
+
 api = Api()
 market = Market(api)
 
-COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price"
-
-VERSION = "1.0"
-
-DEFAULT_ACCOUNT = "gadrian" # change to your username
-DEFAULT_TOKENS = ["SWAP.HIVE", "SPS", "DEC", "LEO"] # change to your prefered list of Hive-Engine tokens
+VERSION = "1.3"
 
 DEBUG = False
 
 def debug_log(text):
-    if (DEBUG):
+    """Local debug logging function that respects the DEBUG flag"""
+    if DEBUG:
         print(text)
 
-def fetch_from_hive_engine(contract, table, query):
-    try:
-        result = api.find(contract, table, query, limit=1000)
-        if result is None:
-            debug_log(f"⚠️ Warning: No results for {table} with query {query}")
-            return []
-        return result
-    except Exception as e:
-        print(f"❌ Error fetching {table}: {e}")
-        return []
+# Override the utility module's debug_log function
+import hive_engine_utils
+hive_engine_utils.debug_log = debug_log
 
-def get_token_holdings(account, tokens):
-    liquid = fetch_from_hive_engine("tokens", "balances", {"account": account})
-    delegated = fetch_from_hive_engine("tokens", "delegations", {"from": account})
-
-    tokens = set(tokens)  # for fast lookup
-    res = defaultdict(lambda: {"liquid": 0, "staked": 0, "delegated_away": 0})
-
-    for b in liquid:
-        s = b["symbol"]
-        if s not in tokens:
-            continue
-        res[s]["liquid"] = float(b["balance"])
-        res[s]["staked"] = float(b.get("stake", 0))  # or "staked" if that's the correct field
-        res[s]["delegated_away"] = float(b.get("delegations", 0))
-
-    for d in delegated:
-        s = d["symbol"]
-        if s not in tokens:
-            continue
-        res[s]["delegated_away"] += float(d["quantity"])
-
-    return res
-
-def get_volume_since(trades, since_seconds_ago):
-    now = int(time.time())  # current UNIX time (seconds)
-    cutoff = now - since_seconds_ago
-    return sum(float(t["volume"]) for t in trades if t.get("volume") and t["timestamp"] >= cutoff)
-
-def get_24h_volume(trades):
-    return get_volume_since(trades, 86400)
-
-def get_market_info(symbol):
-    # Fetch trade history (includes price & timestamp)
-    trades = market.get_trades_history(symbol, limit=1000)
-    if not trades:
-        if (symbol == "SWAP.HIVE"):
-            debug_log(f"  No trades returned for {symbol}")
-            return 1.0, 0.0
-        else:
-            print(f"⚠️ No trades returned for {symbol}")
-            return 0.0, 0.0
-
-    # Latest price (first trade)
-    price_hive = float(trades[0]["price"])
-    vol24 = get_24h_volume(trades)
-
-    return price_hive, vol24
+# Set debug mode for diesel pools module if available
+set_debug_mode(DEBUG)
 
 def display_table(token_data, hive_price_usd, btc_price_usd, account):
+    """Display token holdings in a formatted table"""
     # Sort tokens by total USD value (descending)
     sorted_tokens = sorted(token_data, key=lambda x: x["total_usd"], reverse=True)
 
@@ -107,137 +72,47 @@ def display_table(token_data, hive_price_usd, btc_price_usd, account):
     total_usd = total_hive = total_btc = 0
 
     for token in sorted_tokens:
-        table.add_row([
-            token["symbol"],
-            f'{token["liquid"]:,.3f}',
-            f'{token["staked"]:,.3f}',
-            f'{token["delegated"]:,.3f}',
-            f'{token["liquid"] + token["staked"] + token["delegated"]:,.3f}',
-            f'{token["price_hive"]:,.6f}',
-            f'{token["price_usd"]:,.2f}',
-            f'{token["volume_24h_usd"]:,.2f}',
-            f'{token["total_usd"]:,.2f}',
-            f'{token["total_hive"]:,.3f}',
-            f'{token["total_btc"]:,.8f}',
-        ])
+        total = token["liquid"] + token["staked"] + token["delegated"]
+        if total > 0:
+            table.add_row([
+                token["symbol"],
+                f'{token["liquid"]:,.3f}',
+                f'{token["staked"]:,.3f}',
+                f'{token["delegated"]:,.3f}',
+                f'{total:,.3f}',
+                f'{token["price_hive"]:,.6f}',
+                f'{token["price_usd"]:,.2f}',
+                f'{token["volume_24h_usd"]:,.2f}',
+                f'{token["total_usd"]:,.2f}',
+                f'{token["total_hive"]:,.3f}',
+                f'{token["total_btc"]:,.8f}',
+            ])
 
         total_usd += token["total_usd"]
         total_hive += token["total_hive"]
         total_btc += token["total_btc"]
 
-    table.add_divider()
-
-    # Add summary row
-    table.add_row([
-        "TOTAL", "", "", "", "",
-        "", "",
-        "",
-        f'{total_usd:,.2f}',
-        f'{total_hive:,.3f}',
-        f'{total_btc:,.8f}'
-    ])
+    if len(sorted_tokens) > 1:  # Only add totals if more than one token
+        table.add_divider()
+        # Add summary row
+        table.add_row([
+            "TOTAL", "", "", "", "",
+            "", "",
+            "",
+            f'{total_usd:,.2f}',
+            f'{total_hive:,.3f}',
+            f'{total_btc:,.8f}'
+        ])
 
     table.align = "r"
     table.align["Symbol"] = "l"
-
-    
     table.set_style(TableStyle.SINGLE_BORDER)
 
+    print("💰 TOKEN HOLDINGS:")
     print(table)
 
-    # Add BTC/HIVE ratio, and prices of HIVE and BTC
-    if btc_price_usd > 0:
-        hive_btc_ratio = int(btc_price_usd / hive_price_usd)
-        print()
-        print(f"  HIVE BTC ≈ 1 / {hive_btc_ratio:,.0f}")
-        print(f"  HIVE USD = {hive_price_usd:,.6f}")
-        print(f"  BTC  USD = {btc_price_usd:,.0f}")
-        print()
-
-def get_hive_price_usd():
-    try:
-        resp = requests.get(COINGECKO_API, params={"ids":"hive","vs_currencies":"usd"})
-        resp.raise_for_status()
-        return resp.json().get("hive", {}).get("usd", 0)
-    except Exception as e:
-        print(f"❌ Error fetching HIVE price: {e}")
-        return 0
-
-def get_btc_price_usd():
-    try:
-        resp = requests.get(COINGECKO_API, params={"ids":"bitcoin","vs_currencies":"usd"})
-        resp.raise_for_status()
-        return resp.json().get("bitcoin", {}).get("usd", 0)
-    except Exception as e:
-        print(f"❌ Error fetching BTC price: {e}")
-        return 0
-
-def validate_username(username):
-    """
-    Validate Hive username according to rules:
-    - Must be lowercase (should be automatically)
-    - Start with a letter
-    - Only letters, numbers, dashes, and dots
-    - Length between 3 and 16 characters
-    - Dashes and dots cannot be consecutive or at beginning/end
-    """
-    if not username:
-        return False, "Username cannot be empty"
-    
-    # Check length
-    if len(username) < 3 or len(username) > 16:
-        return False, "Username must be between 3 and 16 characters"
-    
-    # Check if lowercase
-    if username != username.lower():
-        return False, "Username must be lowercase"
-    
-    # Check if starts with letter
-    if not username[0].isalpha():
-        return False, "Username must start with a letter"
-    
-    # Check if ends with dash or dot
-    if username[-1] in '-.':
-        return False, "Username cannot end with dash or dot"
-    
-    # Check allowed characters
-    allowed_chars = set('abcdefghijklmnopqrstuvwxyz0123456789-.')
-    if not all(c in allowed_chars for c in username):
-        return False, "Username can only contain letters, numbers, dashes, and dots"
-    
-    # Check for consecutive dashes/dots
-    for i in range(len(username) - 1):
-        if username[i] in '-.' and username[i + 1] in '-.':
-            return False, "Username cannot have consecutive dashes or dots"
-    
-    return True, "Valid username"
-
-def validate_token(token):
-    """
-    Validate token according to rules:
-    - Must be uppercase (should be automatically)
-    - Only letters and dots (for tokens like SWAP.BTC)
-    - Maximum 10 characters
-    """
-    if not token:
-        return False, "Token cannot be empty"
-    
-    # Check length
-    if len(token) > 10:
-        return False, f"Token '{token}' exceeds 10 character limit"
-    
-    # Check if uppercase
-    if token != token.upper():
-        return False, f"Token '{token}' must be uppercase"
-    
-    # Check allowed characters (letters and dots only)
-    allowed_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ.')
-    if not all(c in allowed_chars for c in token):
-        return False, f"Token '{token}' can only contain uppercase letters and dots"
-    
-    return True, "Valid token"
-
 def parse_arguments():
+    """Command-line arguments parsing"""
     parser = argparse.ArgumentParser(
         description=f"My Hive Engine Tokens Snapshot v{VERSION}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -247,10 +122,13 @@ Examples:
   python3 he-tokens-snapshot.py -u alice
   python3 he-tokens-snapshot.py -u bob -t SPS LEO DEC
   python3 he-tokens-snapshot.py --username charlie --tokens SWAP.BTC DBOND INCOME
+  python3 he-tokens-snapshot.py --debug
 
 Remarks:
   - Username must be a valid Hive username.
   - Tokens must be valid Hive-Engine tokens.
+  - Diesel pools are tracked automatically.
+  - Use --debug to see detailed processing information.
 
 Tip:
   Use redirect to have the output in a file instead of the screen.
@@ -260,28 +138,45 @@ Tip:
     parser.add_argument(
         '-u', '--username',
         type=str,
-        help='Hive username to check (default: gadrian)'
+        help=f'Hive username to check (default: {DEFAULT_ACCOUNT})'
     )
     
     parser.add_argument(
         '-t', '--tokens',
         nargs='+',
         type=str,
-        help='List of tokens to snapshot (default: SWAP.HIVE SPS DEC LEO)'
+        help=f'List of tokens to snapshot (default: {" ".join(DEFAULT_TOKENS)})'
+    )
+    
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable debug output'
     )
     
     return parser.parse_args()
 
 def main():
+    global DEBUG
+    
     # Parse command line arguments
     args = parse_arguments()
+    
+    # Set debug mode
+    DEBUG = args.debug
+    
+    # Update debug functions
+    import hive_engine_utils
+    hive_engine_utils.debug_log = debug_log
+    set_debug_mode(DEBUG)
     
     # Use command line arguments if provided, otherwise use defaults
     ACCOUNT = args.username if args.username else DEFAULT_ACCOUNT
     TOKENS = [token.upper() for token in args.tokens] if args.tokens else DEFAULT_TOKENS
 
-    if (ACCOUNT):
+    if ACCOUNT:
         ACCOUNT = ACCOUNT.lower()
+        
     # Validate username
     is_valid_user, user_msg = validate_username(ACCOUNT)
     if not is_valid_user:
@@ -289,77 +184,144 @@ def main():
         print("   Username must be a valid Hive username.")
         return
     
+    debug_log(f"🎯 Account: @{ACCOUNT}")
+    debug_log("🔍 Fetching token list from Hive Engine for validation...")
+    
+    valid_token_symbols = fetch_all_tokens(api)
+    debug_log(f"✅ Found {len(valid_token_symbols)} valid tokens")
+
     # Validate tokens
     for token in TOKENS:
-        is_valid_token, token_msg = validate_token(token)
+        is_valid_token, token_msg = validate_token(token, valid_token_symbols)
         if not is_valid_token:
             print(f"❌ Invalid token: {token_msg}")
             print("   Token must be a valid Hive-Engine token.")
             return
-    
-    # Display what we're using
-    print(f"🎯 Account: @{ACCOUNT}")
-    print(f"🪙 Tokens: {', '.join(TOKENS)}")
-    dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"   Snapshot date/time: {dt}")
-    print()
 
-    debug_log(f"🔄 Fetching portfolio data for @{ACCOUNT}...")
-    
-    holdings = get_token_holdings(ACCOUNT, TOKENS)
+    # Display what we're using
+    debug_log(f"🪙 Tokens: {', '.join(TOKENS)}")
+    dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    debug_log(f"   Snapshot date/time: {dt}")
+    debug_log('')
+
+    print(f"🔄 Fetching data for @{ACCOUNT}...")
+
+    # Get regular token holdings
+    debug_log("📊 Fetching token holdings...")
+    holdings = get_token_holdings(api, ACCOUNT, TOKENS)        
+
+    # Get price data
+    debug_log("💰 Fetching HIVE and BTC prices...")
     hive_usd = get_hive_price_usd()
     btc_usd = get_btc_price_usd()
     
-    debug_log(f"💰 HIVE Price: ${hive_usd:.6f}")
-    debug_log(f"🪙 BTC Price: ${btc_usd:.0f}")
-    debug_log('')
+    debug_log(f"💰 HIVE: ${hive_usd:.6f}, BTC: ${btc_usd:.0f}")
 
+    # Process regular tokens
     token_data = []
-    
-    for sym in TOKENS:
-        if sym in holdings:
-            d = holdings[sym]
-            debug_log(f"📊 Fetching market data for {sym}...")
-            price_hive, vol24_hive = get_market_info(sym)
-            total_amount = d['liquid'] + d['staked'] + d['delegated_away']
-            price_usd = price_hive * hive_usd
-            vol24_usd = vol24_hive * hive_usd
-            total_usd = total_amount * price_usd
-            total_hive = total_amount * price_hive
-            total_btc = total_usd / btc_usd if btc_usd > 0 else 0
-            
-            token_data.append({
-                "symbol": sym,
-                "liquid": d['liquid'],
-                "staked": d['staked'],
-                "delegated": d['delegated_away'],
-                "price_hive": price_hive,
-                "price_usd": price_usd,
-                "volume_24h_usd": vol24_usd,
-                "total_usd": total_usd,
-                "total_hive": total_hive,
-                "total_btc": total_btc
-            })
-        else:
-            debug_log(f"❌ No holdings for {sym}... Printing all as zero.")
-            token_data.append({
-                "symbol": sym,
-                "liquid": 0.0,
-                "staked": 0.0,
-                "delegated": 0.0,
-                "price_hive": 0.0,
-                "price_usd": 0.0,
-                "volume_24h_usd": 0.0,
-                "total_usd": 0.0,
-                "total_hive": 0.0,
-                "total_btc": 0.0
-            })
+    token_prices = {}  # Store prices for diesel pool calculations
 
-    if token_data:
-        print()
-        display_table(token_data, hive_usd, btc_usd, ACCOUNT)
+    for sym in TOKENS:
+        d = holdings.get(sym, {"liquid": 0.0, "staked": 0.0, "delegated_away": 0.0})
+        debug_log(f"📊 Fetching market data for {sym}...")
+        price_hive, vol24_hive = get_market_info(api, market, sym)
+        
+        # Store price for diesel pool calculations
+        token_prices[sym] = price_hive
+        
+        total_amount = d['liquid'] + d['staked'] + d['delegated_away']
+        price_usd = price_hive * hive_usd
+        vol24_usd = vol24_hive * hive_usd
+        total_usd = total_amount * price_usd
+        total_hive = total_amount * price_hive
+        total_btc = total_usd / btc_usd if btc_usd > 0 else 0
+        
+        token_data.append({
+            "symbol": sym,
+            "liquid": d['liquid'],
+            "staked": d['staked'],
+            "delegated": d['delegated_away'],
+            "price_hive": price_hive,
+            "price_usd": price_usd,
+            "volume_24h_usd": vol24_usd,
+            "total_usd": total_usd,
+            "total_hive": total_hive,
+            "total_btc": total_btc
+        })
+
+    # Get diesel pool holdings if available
+    pool_data = []
+    debug_log("🏊 Fetching diesel pool positions...")
+
+    # Get additional token prices that might be needed for pools
+    # We'll let the diesel pool module handle price fetching for pool tokens
+    pool_data = get_user_pool_portfolio(ACCOUNT, api, token_prices)
+
+    if pool_data:
+        debug_log(f"✅ Found {len(pool_data)} diesel pool positions")
+        # Convert to USD and BTC values
+        for pool in pool_data:
+            pool["total_usd"] = pool["total_hive"] * hive_usd
+            pool["total_btc"] = pool["total_usd"] / btc_usd if btc_usd > 0 else 0
     else:
-        print("❌ No token data to display")
+        debug_log("ℹ️ No diesel pool positions found")
+
+    # Display header information
+    print()
+    print(f"🎯 Account: @{ACCOUNT}")
+    print(f"🪙 Tokens: {', '.join(TOKENS)}")
+    print(f"   Snapshot date/time: {dt}")
+    print()
+    print(f"💰 HIVE Price: ${hive_usd:.6f}")
+    print(f"🪙 BTC Price: ${btc_usd:.0f}")
+    print()
+
+    # Display results
+    has_token_data = any(t["total_usd"] > 0 for t in token_data)
+    has_pool_data = len(pool_data) > 0
+
+    if has_token_data:
+        display_table(token_data, hive_usd, btc_usd, ACCOUNT)
+        print()
+    else:
+        print("ℹ️ No significant token holdings found")
+    
+    if has_pool_data:
+        display_diesel_pools_table(pool_data, hive_usd, btc_usd, ACCOUNT)
+        print()
+    else:
+        debug_log("ℹ️ No diesel pool positions found")
+    
+    # Display combined totals if both exist
+    if has_token_data and has_pool_data:
+        total_tokens_usd = sum(t["total_usd"] for t in token_data)
+        total_pools_usd = sum(p["total_usd"] for p in pool_data)
+        total_combined_usd = total_tokens_usd + total_pools_usd
+        
+        total_tokens_hive = sum(t["total_hive"] for t in token_data)
+        total_pools_hive = sum(p["total_hive"] for p in pool_data)
+        total_combined_hive = total_tokens_hive + total_pools_hive
+        
+        total_combined_btc = total_combined_usd / btc_usd if btc_usd > 0 else 0
+        
+        print("=" * 80)
+        print("📊 COMBINED PORTFOLIO SUMMARY:")
+        print(f"   Regular Tokens:   ${total_tokens_usd:,.2f} USD  |  {total_tokens_hive:,.4f} HIVE")
+        print(f"   Diesel Pools:     ${total_pools_usd:,.2f} USD  |  {total_pools_hive:,.4f} HIVE") 
+        print(f"   TOTAL PORTFOLIO:  ${total_combined_usd:,.2f} USD  |  {total_combined_hive:,.4f} HIVE  |  {total_combined_btc:.8f} BTC")
+        print("=" * 80)
+
+    # Add BTC/HIVE ratio, and prices of HIVE and BTC
+    if btc_usd > 0 and hive_usd > 0:
+        hive_btc_ratio = int(btc_usd / hive_usd)
+        print()
+        print(f"  HIVE:BTC ≈ 1:{hive_btc_ratio:,.0f}")
+        print(f"  HIVE USD = ${hive_usd:,.6f}")
+        print(f"  BTC  USD = ${btc_usd:,.0f}")
+        print()
+
+    # Clear caches at the end
+    clear_caches()
 
 if __name__ == "__main__":
     main()
