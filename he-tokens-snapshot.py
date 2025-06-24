@@ -21,14 +21,17 @@ from config import DEFAULT_ACCOUNT, DEFAULT_TOKENS
 # Import our utility functions
 from hive_engine_utils import (
     debug_log as util_debug_log,
-    get_token_holdings,
-    get_market_info,
     get_hive_price_usd,
     get_btc_price_usd,
-    validate_username,
-    validate_token,
+    get_token_holdings,
+    get_market_info,
     fetch_all_tokens,
     clear_caches
+)
+
+from utils import (
+    validate_token,
+    validate_username,
 )
 
 # Import diesel pool functions
@@ -41,9 +44,9 @@ from diesel_pools import (
 api = Api()
 market = Market(api)
 
-VERSION = "1.3"
+VERSION = "1.31"
 
-DEBUG = False
+DEBUG = True
 
 def debug_log(text):
     """Local debug logging function that respects the DEBUG flag"""
@@ -51,8 +54,7 @@ def debug_log(text):
         print(text)
 
 # Override the utility module's debug_log function
-import hive_engine_utils
-hive_engine_utils.debug_log = debug_log
+util_debug_log.debug_log = debug_log
 
 # Set debug mode for diesel pools module if available
 set_debug_mode(DEBUG)
@@ -163,11 +165,10 @@ def main():
     args = parse_arguments()
     
     # Set debug mode
-    DEBUG = args.debug
+    if (args.debug): DEBUG = args.debug
     
     # Update debug functions
-    import hive_engine_utils
-    hive_engine_utils.debug_log = debug_log
+    util_debug_log = debug_log
     set_debug_mode(DEBUG)
     
     # Use command line arguments if provided, otherwise use defaults
@@ -273,7 +274,7 @@ def main():
     print(f"   Snapshot date/time: {dt}")
     print()
     print(f"💰 HIVE Price: ${hive_usd:.6f}")
-    print(f"🪙 BTC Price: ${btc_usd:.0f}")
+    print(f"🪙 BTC Price: ${btc_usd:,.0f}")
     print()
 
     # Display results
@@ -306,18 +307,18 @@ def main():
         
         print("=" * 80)
         print("📊 COMBINED PORTFOLIO SUMMARY:")
-        print(f"   Regular Tokens:   ${total_tokens_usd:,.2f} USD  |  {total_tokens_hive:,.4f} HIVE")
-        print(f"   Diesel Pools:     ${total_pools_usd:,.2f} USD  |  {total_pools_hive:,.4f} HIVE") 
-        print(f"   TOTAL PORTFOLIO:  ${total_combined_usd:,.2f} USD  |  {total_combined_hive:,.4f} HIVE  |  {total_combined_btc:.8f} BTC")
+        print(f"   Regular Tokens:   ${total_tokens_usd:8,.2f} USD  |  {total_tokens_hive:10,.3f} HIVE")
+        print(f"   Diesel Pools:     ${total_pools_usd:8,.2f} USD  |  {total_pools_hive:10,.3f} HIVE") 
+        print(f"   TOTAL PORTFOLIO:  ${total_combined_usd:8,.2f} USD  |  {total_combined_hive:10,.3f} HIVE  |  {total_combined_btc:3.8f} BTC")
         print("=" * 80)
 
     # Add BTC/HIVE ratio, and prices of HIVE and BTC
     if btc_usd > 0 and hive_usd > 0:
         hive_btc_ratio = int(btc_usd / hive_usd)
         print()
-        print(f"  HIVE:BTC ≈ 1:{hive_btc_ratio:,.0f}")
-        print(f"  HIVE USD = ${hive_usd:,.6f}")
-        print(f"  BTC  USD = ${btc_usd:,.0f}")
+        print(f"  HIVE:BTC ≈ 1/{hive_btc_ratio:,.0f}")
+        print(f"  HIVE:USD = ${hive_usd:,.6f}")
+        print(f"  BTC :USD = ${btc_usd:,.0f}")
         print()
 
     # Clear caches at the end
