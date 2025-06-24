@@ -19,7 +19,7 @@ from hiveengine.market import Market
 from config import DEFAULT_ACCOUNT, DEFAULT_TOKENS
 
 # Import our utility functions
-from hive_engine_utils import (
+from regular_tokens import (
     debug_log as util_debug_log,
     get_hive_price_usd,
     get_btc_price_usd,
@@ -46,7 +46,7 @@ market = Market(api)
 
 VERSION = "1.31"
 
-DEBUG = True
+DEBUG = False
 
 def debug_log(text):
     """Local debug logging function that respects the DEBUG flag"""
@@ -307,9 +307,9 @@ def main():
         
         print("=" * 80)
         print("📊 COMBINED PORTFOLIO SUMMARY:")
-        print(f"   Regular Tokens:   ${total_tokens_usd:8,.2f} USD  |  {total_tokens_hive:10,.3f} HIVE")
-        print(f"   Diesel Pools:     ${total_pools_usd:8,.2f} USD  |  {total_pools_hive:10,.3f} HIVE") 
-        print(f"   TOTAL PORTFOLIO:  ${total_combined_usd:8,.2f} USD  |  {total_combined_hive:10,.3f} HIVE  |  {total_combined_btc:3.8f} BTC")
+        print(f"   Regular Tokens:   ${total_tokens_usd:8,.2f} USD  |  {total_tokens_hive:9,.3f} HIVE")
+        print(f"   Diesel Pools:     ${total_pools_usd:8,.2f} USD  |  {total_pools_hive:9,.3f} HIVE") 
+        print(f"   TOTAL PORTFOLIO:  ${total_combined_usd:8,.2f} USD  |  {total_combined_hive:9,.3f} HIVE  |  {total_combined_btc:3.8f} BTC")
         print("=" * 80)
 
     # Add BTC/HIVE ratio, and prices of HIVE and BTC

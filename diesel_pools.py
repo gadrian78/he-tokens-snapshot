@@ -17,7 +17,7 @@ import time
 import random
 from prettytable import PrettyTable, TableStyle
 
-from hive_engine_utils import fetch_from_hive_engine
+from regular_tokens import fetch_from_hive_engine
 
 # Global debug flag - can be set from main script
 DEBUG = False
