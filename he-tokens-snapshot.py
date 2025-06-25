@@ -8,6 +8,8 @@
 #
 ######################################
 
+import json
+import os
 from datetime import datetime
 from prettytable import PrettyTable, TableStyle
 import argparse
@@ -16,26 +18,30 @@ from hiveengine.api import Api
 from hiveengine.market import Market
 
 # Import configs
-from config import DEFAULT_ACCOUNT, DEFAULT_TOKENS
+from modules.config import DEFAULT_ACCOUNT, DEFAULT_TOKENS, BASE_SNAPSHOTS_DIR
 
-# Import our utility functions
-from regular_tokens import (
+from modules.regular_tokens import (
     debug_log as util_debug_log,
     get_hive_price_usd,
     get_btc_price_usd,
     get_token_holdings,
     get_market_info,
-    fetch_all_tokens,
-    clear_caches
+    fetch_all_tokens
 )
 
-from utils import (
+from modules.cache_utils import clear_caches
+
+from modules.misc_utils import (
     validate_token,
     validate_username,
+    get_snapshot_types_for_date,
+    generate_snapshot_filename,
+    get_user_snapshots_dir,
+    validate_snapshots_dir
 )
 
 # Import diesel pool functions
-from diesel_pools import (
+from modules.diesel_pools import (
     get_user_pool_portfolio,
     display_diesel_pools_table,
     set_debug_mode
@@ -44,7 +50,12 @@ from diesel_pools import (
 api = Api()
 market = Market(api)
 
-VERSION = "1.31"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+   VERSION = version("my-hive-engine-tokens-snapshot")
+except PackageNotFoundError:
+   VERSION = "(not found)"
 
 DEBUG = False
 
@@ -58,6 +69,149 @@ util_debug_log.debug_log = debug_log
 
 # Set debug mode for diesel pools module if available
 set_debug_mode(DEBUG)
+
+def create_portfolio_json(token_data, pool_data, hive_usd, btc_usd, account, timestamp):
+    """Create comprehensive portfolio JSON structure"""
+    
+    # Calculate totals
+    total_tokens_usd = sum(t["total_usd"] for t in token_data)
+    total_pools_usd = sum(p["total_usd"] for p in pool_data)
+    total_combined_usd = total_tokens_usd + total_pools_usd
+    
+    total_tokens_hive = sum(t["total_hive"] for t in token_data)
+    total_pools_hive = sum(p["total_hive"] for p in pool_data)
+    total_combined_hive = total_tokens_hive + total_pools_hive
+    
+    total_combined_btc = total_combined_usd / btc_usd if btc_usd > 0 else 0
+    
+    # Build comprehensive JSON structure
+    portfolio_data = {
+        "metadata": {
+            "account": account,
+            "snapshot_timestamp": timestamp,
+            "snapshot_unix": int(datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").timestamp()),
+            "script_version": VERSION,
+            "prices": {
+                "hive_usd": hive_usd,
+                "btc_usd": btc_usd,
+                "hive_btc_ratio": int(btc_usd / hive_usd) if hive_usd > 0 else 0
+            }
+        },
+        "summary": {
+            "total_portfolio": {
+                "usd": total_combined_usd,
+                "hive": total_combined_hive,
+                "btc": total_combined_btc
+            },
+            "tokens_total": {
+                "usd": total_tokens_usd,
+                "hive": total_tokens_hive,
+                "btc": total_tokens_usd / btc_usd if btc_usd > 0 else 0
+            },
+            "pools_total": {
+                "usd": total_pools_usd,
+                "hive": total_pools_hive,
+                "btc": total_pools_usd / btc_usd if btc_usd > 0 else 0
+            },
+            "token_count": len([t for t in token_data if t["total_usd"] > 0]),
+            "pool_count": len(pool_data)
+        },
+        "tokens": {
+            token["symbol"]: {
+                "liquid": token["liquid"],
+                "staked": token["staked"],
+                "delegated": token["delegated"],
+                "total_amount": token["liquid"] + token["staked"] + token["delegated"],
+                "prices": {
+                    "hive": token["price_hive"],
+                    "usd": token["price_usd"]
+                },
+                "market": {
+                    "volume_24h_usd": token["volume_24h_usd"]
+                },
+                "values": {
+                    "usd": token["total_usd"],
+                    "hive": token["total_hive"],
+                    "btc": token["total_btc"]
+                }
+            }
+            for token in token_data if token["total_usd"] > 0 or token["liquid"] + token["staked"] + token["delegated"] > 0
+        },
+        "diesel_pools": {
+            pool["token_pair"]: {
+                "pool_name": pool.get("token_pair", pool["token_pair"]),
+                "shares": pool["user_shares"],
+                "share_percentage": pool.get("share_percentage", 0),
+                "base_amount": pool.get("base_amount", 0),
+                "quote_amount": pool.get("quote_amount", 0),
+                "values": {
+                    "usd": pool["total_usd"],
+                    "hive": pool["total_hive"],
+                    "btc": pool["total_btc"]
+                }
+            }
+            for pool in pool_data
+        }
+    }
+    
+    return portfolio_data
+
+def save_snapshot(snapshot_type, token_data, pool_data, hive_usd, btc_usd, account, timestamp, snapshots_dir):
+    """Save a single snapshot file"""
+    
+    # Create directory structure
+    type_dir = os.path.join(snapshots_dir, snapshot_type)
+    os.makedirs(type_dir, exist_ok=True)
+    
+    # Generate filename
+    date_obj = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+    filename = generate_snapshot_filename(snapshot_type, account, date_obj)
+    filepath = os.path.join(type_dir, filename)
+    
+    # Create JSON data
+    portfolio_json = create_portfolio_json(token_data, pool_data, hive_usd, btc_usd, account, timestamp)
+    
+    # Add snapshot-specific metadata
+    portfolio_json["metadata"]["snapshot_type"] = snapshot_type
+    portfolio_json["metadata"]["filename"] = filename
+    
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(portfolio_json, f, indent=2, ensure_ascii=False)
+        
+        debug_log(f"✅ Saved {snapshot_type} snapshot: {filepath}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to save {snapshot_type} snapshot: {e}")
+        return False
+
+def save_automated_snapshots(token_data, pool_data, hive_usd, btc_usd, account, timestamp, snapshots_dir, quiet=False):
+    """Save all applicable snapshot types for the current date"""
+
+     # Get user-specific snapshots directory
+    user_snapshots_dir = get_user_snapshots_dir(snapshots_dir, account)
+
+     # Create user directory if it doesn't exist
+    os.makedirs(user_snapshots_dir, exist_ok=True)
+    
+    date_obj = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+    snapshot_types = get_snapshot_types_for_date(date_obj)
+    
+    if not quiet:
+        print(f"📸 Taking snapshots: {', '.join(snapshot_types)}")
+        print(f"📁 Saving to: {user_snapshots_dir}")
+    
+    saved_count = 0
+    for snapshot_type in snapshot_types:
+        if save_snapshot(snapshot_type, token_data, pool_data, hive_usd, btc_usd, account, timestamp, user_snapshots_dir):
+            saved_count += 1
+    
+    if not quiet:
+        print(f"✅ Successfully saved {saved_count}/{len(snapshot_types)} snapshots")
+        print()
+    
+    return saved_count
 
 def display_table(token_data, hive_price_usd, btc_price_usd, account):
     """Display token holdings in a formatted table"""
@@ -125,15 +279,25 @@ Examples:
   python3 he-tokens-snapshot.py -u bob -t SPS LEO DEC
   python3 he-tokens-snapshot.py --username charlie --tokens SWAP.BTC DBOND INCOME
   python3 he-tokens-snapshot.py --debug
+  python3 he-tokens-snapshot.py --quiet --snapshots-dir /path/to/snapshots
 
 Remarks:
   - Username must be a valid Hive username.
   - Tokens must be valid Hive-Engine tokens.
   - Diesel pools are tracked automatically.
+  - Snapshots are automatically saved based on current date.
   - Use --debug to see detailed processing information.
+  - Use --quiet for automated/scheduled runs.
+
+Snapshot Types (automatic based on date):
+  - Daily: Every day
+  - Weekly: Every Monday (+ daily)
+  - Monthly: 1st of each month (+ daily, + weekly if Monday)
+  - Quarterly: 1st of Jan/Apr/Jul/Oct (+ daily, + weekly if Monday, + monthly)
+  - Yearly: January 1st (+ all other applicable types)
 
 Tip:
-  Use redirect to have the output in a file instead of the screen.
+  Use redirect to have the console output in a file instead of the screen.
         """
     )
     
@@ -148,6 +312,19 @@ Tip:
         nargs='+',
         type=str,
         help=f'List of tokens to snapshot (default: {" ".join(DEFAULT_TOKENS)})'
+    )
+    
+    parser.add_argument(
+        '--snapshots-dir',
+        type=str,
+        default='./snapshots',
+        help='Directory to save snapshots (default: ./snapshots)'
+    )
+    
+    parser.add_argument(
+        '--quiet',
+        action='store_true',
+        help='Suppress console output (useful for automated runs)'
     )
     
     parser.add_argument(
@@ -166,6 +343,9 @@ def main():
     
     # Set debug mode
     if (args.debug): DEBUG = args.debug
+
+    QUIET = args.quiet
+    if (QUIET): DEBUG = False
     
     # Update debug functions
     util_debug_log = debug_log
@@ -174,6 +354,18 @@ def main():
     # Use command line arguments if provided, otherwise use defaults
     ACCOUNT = args.username if args.username else DEFAULT_ACCOUNT
     TOKENS = [token.upper() for token in args.tokens] if args.tokens else DEFAULT_TOKENS
+    
+    # Validate snapshots directory
+    SNAPSHOTS_DIR = args.snapshots_dir if args.snapshots_dir else BASE_SNAPSHOTS_DIR
+    is_valid_dir, dir_msg, normalized_dir = validate_snapshots_dir(SNAPSHOTS_DIR)
+    
+    if not is_valid_dir:
+        if not QUIET:
+            print(f"❌ Invalid snapshots directory '{SNAPSHOTS_DIR}': {dir_msg}")
+        return
+    
+    # Use the normalized path
+    SNAPSHOTS_DIR = normalized_dir
 
     if ACCOUNT:
         ACCOUNT = ACCOUNT.lower()
@@ -181,8 +373,9 @@ def main():
     # Validate username
     is_valid_user, user_msg = validate_username(ACCOUNT)
     if not is_valid_user:
-        print(f"❌ Invalid username '{ACCOUNT}': {user_msg}")
-        print("   Username must be a valid Hive username.")
+        if not QUIET:
+            print(f"❌ Invalid username '{ACCOUNT}': {user_msg}")
+            print("   Username must be a valid Hive username.")
         return
     
     debug_log(f"🎯 Account: @{ACCOUNT}")
@@ -195,8 +388,9 @@ def main():
     for token in TOKENS:
         is_valid_token, token_msg = validate_token(token, valid_token_symbols)
         if not is_valid_token:
-            print(f"❌ Invalid token: {token_msg}")
-            print("   Token must be a valid Hive-Engine token.")
+            if not QUIET:
+                print(f"❌ Invalid token: {token_msg}")
+                print("   Token must be a valid Hive-Engine token.")
             return
 
     # Display what we're using
@@ -205,7 +399,8 @@ def main():
     debug_log(f"   Snapshot date/time: {dt}")
     debug_log('')
 
-    print(f"🔄 Fetching data for @{ACCOUNT}...")
+    if not QUIET:
+        print(f"🔄 Fetching data for @{ACCOUNT}...")
 
     # Get regular token holdings
     debug_log("📊 Fetching token holdings...")
@@ -267,6 +462,14 @@ def main():
     else:
         debug_log("ℹ️ No diesel pool positions found")
 
+    # Save automated snapshots (always save, regardless of quiet mode)
+    save_automated_snapshots(token_data, pool_data, hive_usd, btc_usd, ACCOUNT, dt, SNAPSHOTS_DIR, QUIET)
+
+    # Skip console display if quiet mode
+    if QUIET:
+        clear_caches()
+        return
+
     # Display header information
     print()
     print(f"🎯 Account: @{ACCOUNT}")
@@ -307,9 +510,9 @@ def main():
         
         print("=" * 80)
         print("📊 COMBINED PORTFOLIO SUMMARY:")
-        print(f"   Regular Tokens:   ${total_tokens_usd:8,.2f} USD  |  {total_tokens_hive:9,.3f} HIVE")
-        print(f"   Diesel Pools:     ${total_pools_usd:8,.2f} USD  |  {total_pools_hive:9,.3f} HIVE") 
-        print(f"   TOTAL PORTFOLIO:  ${total_combined_usd:8,.2f} USD  |  {total_combined_hive:9,.3f} HIVE  |  {total_combined_btc:3.8f} BTC")
+        print(f"   Regular Tokens:   {total_tokens_usd:10,.2f} USD  |  {total_tokens_hive:11,.3f} HIVE")
+        print(f"   Diesel Pools:     {total_pools_usd:10,.2f} USD  |  {total_pools_hive:11,.3f} HIVE") 
+        print(f"   TOTAL PORTFOLIO:  {total_combined_usd:10,.2f} USD  |  {total_combined_hive:11,.3f} HIVE  |  {total_combined_btc:3.8f} BTC")
         print("=" * 80)
 
     # Add BTC/HIVE ratio, and prices of HIVE and BTC
