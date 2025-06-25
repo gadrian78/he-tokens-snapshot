@@ -26,10 +26,16 @@ The script automatically installs dependencies needed to run this tool.
 
 It also creates the service and the timer needed, restarts the deamon and tests to see if the service is working properly at the end. It works for a list of users.
 
-You should edit the file with your own information for these variables (otherwise it won't work!):
+You need to edit the file with your own information for these variables (otherwise it won't work!):
 ```
 SCRIPT_PATH="/home/path-to-project/he-tokens-snapshot.py"  # Shared script location
 SNAPSHOTS_BASE_DIR="/home/path-to-project-snapshots"         # Base directory for all snapshots
+```
+
+Also, add YOUR list of accounts here:
+```
+# List of usernames to monitor - MODIFY THIS ARRAY
+USERNAMES=("alice" "bob" "charlie" "diana")
 ```
 
 Make sure the file has the permission to be executed and that you have admin rights, otherwise you won't be able to set up the service and the timer.
