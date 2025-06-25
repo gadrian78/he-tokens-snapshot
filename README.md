@@ -12,7 +12,7 @@ The tool has persistent caching and a 15 minutes expiration time to avoid unnecc
 
 * Python 3.10+ (only tested with 3.10.12, probably works with lower versions)
 
-* dependencies from `requirements.txt` (installed automatically if you use `setup.py`)
+* dependencies from `requirements.txt` (installed automatically if you use `setup.sh`)
 
 ## Installing dependencies and setting up to run automatically
 
