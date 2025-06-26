@@ -15,3 +15,5 @@
 # !! Note that the more accounts you track and the longer the list of tokens the more time it takes to process them !!
 
 echo "Manual run of Hive Engine Tokens Snapshot completed for the accounts provided." # you can list your accounts in the final message if you want to.
+echo
+
