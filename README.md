@@ -48,7 +48,7 @@ Make sure the file has the permission to be executed and that you have admin rig
 If everything went alright and you received no errors, the script should run every morning at 8am or as soon as the computer is turned on and has access to internet after that, for all users in the list and their associated list of tokens (and all the diesel pools).
 
 Daily, weekly, monthly, quarterly and yearly snapshots are saved under the directory provided for that purpose with a directory structure as follows:
-
+```
 |- snapshots
 |-- user1
 |---- daily
@@ -56,6 +56,7 @@ Daily, weekly, monthly, quarterly and yearly snapshots are saved under the direc
 |-- user2 
 |---- daily
 |---- weekly
+```
 
 You don't want to set up the script to run automatically? Fine. It can be run manually.
 
