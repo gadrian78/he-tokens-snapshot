@@ -52,7 +52,7 @@ echo
 # Configuration - MODIFY THESE VALUES
 SCRIPT_PATH="/home/shared/hive-scripts/he-tokens-snapshot.py"  # Shared script location
 SNAPSHOTS_BASE_DIR="/home/shared/portfolio-snapshots"         # Base directory for all snapshots
-PYTHON_PATH="/usr/bin/python3"
+PYTHON_PATH="$(dirname "$SCRIPT_PATH")/venv/bin/python3"
 
 # User configuration with custom tokens - MODIFY THIS ASSOCIATIVE ARRAY
 # Format: USER_TOKENS["USERNAME"]="token1 token2 token3 ..."
@@ -94,6 +94,13 @@ if [ ! -d "$VENV_PATH" ]; then
         echo "   Please ensure python3-venv is installed: sudo apt install python3-venv"
         exit 1
     fi
+fi
+
+# Validate the venv exists properly
+if [ ! -f "$VENV_PATH/bin/activate" ]; then
+    echo "❌ Virtual environment activation script not found!"
+    echo "   Something went wrong during virtualenv creation."
+    exit 1
 fi
 
 # Activate virtual environment and install requirements
@@ -300,8 +307,8 @@ echo
 
 # Test if we can run the service manually
 echo "🧪 Testing service (manual run)..."
-echo "⚠️  This will process all users with their custom tokens - press Ctrl+C within 5 seconds to cancel"
-sleep 5
+echo "⚠️  This will process all users with their custom tokens - press Ctrl+C within 3 seconds to cancel"
+sleep 3
 
 if sudo systemctl start hive-portfolio-multi-snapshot.service; then
     echo "✅ Service test successful!"
