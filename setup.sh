@@ -50,8 +50,8 @@ echo "✅ Existing services completely removed"
 echo
 
 # Configuration - MODIFY THESE VALUES
-SCRIPT_PATH="/home/shared/hive-scripts/he-tokens-snapshot.py"  # Shared script location
-SNAPSHOTS_BASE_DIR="/home/shared/portfolio-snapshots"         # Base directory for all snapshots
+SCRIPT_PATH="/home/[path-to-project]/he-tokens-snapshot.py"  # Script location
+SNAPSHOTS_BASE_DIR="/home/[path-to-snapshots]"         # Base directory for all snapshots (a subdirectory of the project main directory?)
 PYTHON_PATH="$(dirname "$SCRIPT_PATH")/venv/bin/python3"
 
 # User configuration with custom tokens - MODIFY THIS ASSOCIATIVE ARRAY
@@ -65,10 +65,15 @@ USER_TOKENS["diana"]="LEO BEE SPS DEC SWAP.HIVE PIZZA"
 # Extract usernames for easy iteration
 USERNAMES=($(echo "${!USER_TOKENS[@]}" | tr ' ' '\n' | sort))
 
+# Get the current user (the one running this script)
+CURRENT_USER=$(whoami)
+CURRENT_GROUP=$(id -gn)
+
 echo "📝 Configuration:"
 echo "   Script path: $SCRIPT_PATH"
 echo "   Base snapshots dir: $SNAPSHOTS_BASE_DIR"
 echo "   Python path: $PYTHON_PATH"
+echo "   Service will run as: $CURRENT_USER:$CURRENT_GROUP"
 echo "   Users and their tokens:"
 for username in "${USERNAMES[@]}"; do
     echo "     $username: ${USER_TOKENS[$username]}"
@@ -85,51 +90,137 @@ fi
 # Create and setup virtual environment if it doesn't exist
 VENV_PATH="$(dirname "$SCRIPT_PATH")/venv"
 
+echo "🐍 Setting up virtual environment..."
+
+# Remove incomplete venv if it exists but is broken
+if [ -d "$VENV_PATH" ] && [ ! -f "$VENV_PATH/bin/activate" ]; then
+    echo "⚠️  Found incomplete virtual environment, removing..."
+    rm -rf "$VENV_PATH"
+fi
+
 if [ ! -d "$VENV_PATH" ]; then
-    echo "🐍 Creating virtual environment at: $VENV_PATH"
+    echo "🔨 Creating virtual environment at: $VENV_PATH"
+    
+    # Create venv with explicit error checking
     if python3 -m venv "$VENV_PATH"; then
-        echo "✅ Created virtual environment: $VENV_PATH"
+        echo "✅ Virtual environment created"
     else
         echo "❌ Failed to create virtual environment"
         echo "   Please ensure python3-venv is installed: sudo apt install python3-venv"
         exit 1
     fi
+    
+    # Wait a moment for filesystem operations to complete
+    sleep 2
+    
+    # Verify critical files exist
+    if [ ! -f "$VENV_PATH/bin/activate" ]; then
+        echo "❌ Virtual environment creation incomplete - missing activate script"
+        echo "   Removing incomplete venv and retrying..."
+        rm -rf "$VENV_PATH"
+        
+        # Retry once
+        if python3 -m venv "$VENV_PATH"; then
+            sleep 3  # Longer wait on retry
+            if [ ! -f "$VENV_PATH/bin/activate" ]; then
+                echo "❌ Virtual environment creation failed on retry"
+                echo "   Check disk space and permissions"
+                exit 1
+            fi
+        else
+            echo "❌ Virtual environment creation failed on retry"
+            exit 1
+        fi
+    fi
+    
+    if [ ! -f "$VENV_PATH/bin/python" ] && [ ! -f "$VENV_PATH/bin/python3" ]; then
+        echo "❌ Virtual environment creation incomplete - missing python executable"
+        rm -rf "$VENV_PATH"
+        exit 1
+    fi
+    
+    echo "✅ Virtual environment created successfully"
+else
+    echo "✅ Using existing virtual environment at: $VENV_PATH"
 fi
 
 # Validate the venv exists properly
 if [ ! -f "$VENV_PATH/bin/activate" ]; then
     echo "❌ Virtual environment activation script not found!"
-    echo "   Something went wrong during virtualenv creation."
+    echo "   Removing broken venv directory..."
+    rm -rf "$VENV_PATH"
+    echo "   Please run this script again to recreate the virtual environment."
     exit 1
 fi
 
-# Activate virtual environment and install requirements
+# Activate virtual environment with error checking
 echo "📦 Installing/updating Python dependencies..."
-source "$VENV_PATH/bin/activate"
+if source "$VENV_PATH/bin/activate"; then
+    echo "✅ Virtual environment activated"
+else
+    echo "❌ Failed to activate virtual environment"
+    echo "   Removing broken venv directory..."
+    rm -rf "$VENV_PATH"
+    exit 1
+fi
 
-# Install prettytable and other common dependencies
-pip3 install --upgrade pip
-pip3 install hiveengine prettytable requests
+# Install dependencies with error checking
+echo "⬆️  Upgrading pip..."
+if pip install --upgrade pip; then
+    echo "✅ Pip upgraded successfully"
+else
+    echo "⚠️  Pip upgrade failed, continuing with existing version"
+fi
+
+echo "📋 Installing required packages..."
+if pip install hiveengine prettytable requests; then
+    echo "✅ Required packages installed"
+else
+    echo "❌ Failed to install required packages"
+    deactivate
+    exit 1
+fi
 
 # Check if there's a requirements.txt file
 REQUIREMENTS_FILE="$(dirname "$SCRIPT_PATH")/requirements.txt"
 if [ -f "$REQUIREMENTS_FILE" ]; then
     echo "📋 Installing from requirements.txt..."
-    pip install -r "$REQUIREMENTS_FILE"
+    if pip install -r "$REQUIREMENTS_FILE"; then
+        echo "✅ Requirements.txt packages installed"
+    else
+        echo "❌ Failed to install from requirements.txt"
+        deactivate
+        exit 1
+    fi
+fi
+
+# Verify installation by testing imports
+echo "🧪 Testing package imports..."
+if python -c "import hiveengine, prettytable, requests; print('All packages imported successfully')"; then
+    echo "✅ Package verification successful"
+else
+    echo "❌ Package verification failed"
+    deactivate
+    exit 1
 fi
 
 deactivate
-echo "✅ Python dependencies installed"
+echo "✅ Python dependencies installed and verified"
 
 # Update Python path to use virtual environment
 PYTHON_PATH="$VENV_PATH/bin/python"
 
-# Verify the Python path exists
+# Final verification of Python path
 if [ ! -f "$PYTHON_PATH" ]; then
     echo "❌ Error: Python not found at $PYTHON_PATH"
-    echo "   Virtual environment creation may have failed"
+    echo "   Virtual environment may be incomplete"
+    echo "   Available python executables in venv:"
+    ls -la "$VENV_PATH/bin/python"* 2>/dev/null || echo "   None found"
     exit 1
 fi
+
+echo "✅ Virtual environment setup completed successfully"
+echo "   Python path: $PYTHON_PATH"
 
 # Create base snapshots directory if it doesn't exist
 mkdir -p "$SNAPSHOTS_BASE_DIR"
@@ -157,6 +248,17 @@ USER_TOKENS_PLACEHOLDER
 
 echo "$(date): Starting multi-user Hive portfolio snapshot"
 
+# Verify Python and packages are available
+if [ ! -f "$PYTHON_PATH" ]; then
+    echo "$(date): ERROR: Python executable not found at $PYTHON_PATH"
+    exit 1
+fi
+
+if ! "$PYTHON_PATH" -c "import hiveengine, prettytable, requests" 2>/dev/null; then
+    echo "$(date): ERROR: Required Python packages not available in virtual environment"
+    exit 1
+fi
+
 for username in "${!USER_TOKENS[@]}"; do
     tokens="${USER_TOKENS[$username]}"
     echo "$(date): Processing user: $username with tokens: $tokens"
@@ -164,8 +266,9 @@ for username in "${!USER_TOKENS[@]}"; do
     # Create user directory if it doesn't exist
     mkdir -p "$SNAPSHOTS_BASE_DIR/$username"
     
-    # Run the script for this user with their specific tokens
-    if "$PYTHON_PATH" "$SCRIPT_PATH" -u "$username" -t $tokens --quiet --snapshots-dir "$SNAPSHOTS_BASE_DIR/$username"; then
+    # FIXED: Pass the base snapshots directory, not the user-specific one
+    # The script will create the user subdirectory structure itself
+    if "$PYTHON_PATH" "$SCRIPT_PATH" -u "$username" -t $tokens --quiet --snapshots-dir "$SNAPSHOTS_BASE_DIR"; then
         echo "$(date): ✅ Success for user: $username"
     else
         echo "$(date): ❌ Failed for user: $username"
@@ -194,7 +297,7 @@ sudo sed -i "s|USER_TOKENS_PLACEHOLDER|$USER_TOKENS_STR|g" /usr/local/bin/hive-p
 sudo chmod +x /usr/local/bin/hive-portfolio-multi-runner.sh
 echo "✅ Created wrapper script: /usr/local/bin/hive-portfolio-multi-runner.sh"
 
-# Create the service file
+# Update the service file creation to use current user
 echo "📄 Creating multi-user service file..."
 sudo tee /etc/systemd/system/hive-portfolio-multi-snapshot.service > /dev/null <<EOF
 [Unit]
@@ -205,9 +308,9 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=root
-Group=root
-WorkingDirectory=/tmp
+User=$CURRENT_USER
+Group=$CURRENT_GROUP
+WorkingDirectory=$(dirname "$SCRIPT_PATH")
 ExecStart=/usr/local/bin/hive-portfolio-multi-runner.sh
 StandardOutput=journal
 StandardError=journal
@@ -297,18 +400,20 @@ echo "Edit user tokens:"
 echo "  sudo nano /usr/local/bin/hive-portfolio-multi-runner.sh"
 echo
 echo "📝 The service will now run:"
+echo "   • As user: $CURRENT_USER:$CURRENT_GROUP"
 echo "   • Daily at 8:00 AM (with 0-10 minute random delay)"
 echo "   • For users and their tokens:"
 for username in "${USERNAMES[@]}"; do
     echo "     - $username: ${USER_TOKENS[$username]}"
 done
+echo "   • Snapshots saved to: $SNAPSHOTS_BASE_DIR/[username]/daily/"
 echo "   • Catch up on missed runs if system was offline"
-echo
 
 # Test if we can run the service manually
 echo "🧪 Testing service (manual run)..."
 echo "⚠️  This will process all users with their custom tokens - press Ctrl+C within 3 seconds to cancel"
 sleep 3
+echo "   Started processing..."
 
 if sudo systemctl start hive-portfolio-multi-snapshot.service; then
     echo "✅ Service test successful!"
