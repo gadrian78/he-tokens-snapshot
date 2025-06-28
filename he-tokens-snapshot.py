@@ -10,6 +10,7 @@
 
 import json
 import os
+import sys
 from datetime import datetime
 from prettytable import PrettyTable, TableStyle
 import argparse
@@ -50,12 +51,35 @@ from modules.diesel_pools import (
 api = Api()
 market = Market(api)
 
-from importlib.metadata import version, PackageNotFoundError
+def get_version_from_pyproject():
+    """Read version from pyproject.toml file"""
+    try:
+        # Get the directory where this script is located
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        pyproject_path = os.path.join(script_dir, 'pyproject.toml')
+        
+        if os.path.exists(pyproject_path):
+            with open(pyproject_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('version = '):
+                        # Extract version from line like: version = "1.53"
+                        version = line.split('=', 1)[1].strip()
+                        # Remove quotes
+                        version = version.strip('"\'')
+                        return version
+        
+        # Fallback: try importlib.metadata (for when actually installed)
+        try:
+            from importlib.metadata import version
+            return version("my-hive-engine-tokens-snapshot")
+        except:
+            return "1.54"  # hardcoded fallback
 
-try:
-   VERSION = version("my-hive-engine-tokens-snapshot")
-except PackageNotFoundError:
-   VERSION = "(not found)"
+    except Exception as e:
+        return f"1.54-error({str(e)[:20]})"
+
+VERSION = get_version_from_pyproject()
 
 DEBUG = False
 
