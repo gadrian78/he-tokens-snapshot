@@ -39,7 +39,7 @@ Everything else should work with default settings.
 
 If you don't want `setup.sh` to make Hive Portfolio Tracker run daily based on the settings in config, set `AUTO_SETUP_SERVICE` to `false`, and run `setup-service.sh` when you want it to run automatically, and `stop-automation.sh` when you want it to stop.
 
-Run `setup.sh` after updating `config.sh`. That will set up Python's virtual environment, create some needed directories, and, if `AUTO_SETUP_SERVICE` is true (it is by default), it will set up the tool to run daily.
+Run `setup.sh` after updating `config.sh`. That will set up Python's virtual environment, install dependencies, create some needed directories, and, if `AUTO_SETUP_SERVICE` is true (it is by default), it will set up the tool to run daily.
 
 On default settings, the script should run every morning at 8am or as soon as the computer is turned on and has access to internet after that, for all users in the list and their associated list of tokens (and all the diesel pools and layer 1 holdings).
 
