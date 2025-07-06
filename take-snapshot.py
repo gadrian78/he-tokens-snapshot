@@ -313,17 +313,17 @@ def display_table(token_data, hive_price_usd, btc_price_usd, account):
 def parse_arguments():
     """Command-line arguments parsing"""
     parser = argparse.ArgumentParser(
-        description=f"My Hive Engine Tokens Snapshot v{VERSION}",
+        description=f"Hive Portfolio Tracker v{VERSION}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python3 he-tokens-snapshot.py
-  python3 he-tokens-snapshot.py -u alice
-  python3 he-tokens-snapshot.py -u bob -t SPS LEO DEC
-  python3 he-tokens-snapshot.py --username charlie --tokens SWAP.BTC DBOND INCOME
-  python3 he-tokens-snapshot.py --debug
-  python3 he-tokens-snapshot.py --quiet --snapshots-dir /path/to/snapshots
-  python3 he-tokens-snapshot.py --no-layer1
+  python3 take-snapshot.py
+  python3 take-snapshot.py -u alice
+  python3 take-snapshot.py -u bob -t SPS LEO DEC
+  python3 take-snapshot.py --username charlie --tokens SWAP.BTC DBOND INCOME
+  python3 take-snapshot.py --debug
+  python3 take-snapshot.py --quiet --snapshots-dir /path/to/snapshots
+  python3 take-snapshot.py --no-layer1
 
 Remarks:
   - Username must be a valid Hive username.
