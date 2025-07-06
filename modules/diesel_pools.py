@@ -1,8 +1,7 @@
 """
 Hive Engine Diesel Pools Module
 
-Extracted from the main Hive Engine tokens snapshot script.
-Contains all diesel pool related functionality.
+Contains all diesel pool-related functionality.
 
 Usage:
     from diesel_pools import get_user_pool_portfolio, display_diesel_pools_table
@@ -10,7 +9,7 @@ Usage:
     pool_data = get_user_pool_portfolio(account, api_instance, token_prices)
     display_diesel_pools_table(pool_data, hive_price_usd, btc_price_usd, account)
 
-Created by https://peakd.com/@gadrian using "vibe" coding in June 2025.
+Created by https://peakd.com/@gadrian using "vibe" coding in June-July 2025.
 """
 
 import time

@@ -2,9 +2,9 @@
 Utilities Module
 
 Other common functions and utilities.
-Used by the Hive Engine Tokens Snapshot tool.
+Used by the Hive Portfolio Tracker tool.
 
-Created by https://peakd.com/@gadrian using "vibe" coding in June 2025.
+Created by https://peakd.com/@gadrian using "vibe" coding in June-July 2025.
 """
 
 # Validation utilities

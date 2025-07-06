@@ -1,3 +1,5 @@
+# Caching functions and utils for Hive Portfolio Tracker
+
 import os
 import json
 import time
@@ -5,18 +7,20 @@ import time
 # Constants
 CACHE_DIR = "__cache"
 PRICE_CACHE_FILE = os.path.join(CACHE_DIR, "price_cache.json")
+L1_CACHE_FILE = os.path.join(CACHE_DIR, "layer1_holdings.json")
 MARKET_CACHE_FILE = os.path.join(CACHE_DIR, "market_cache.json")
 DIESEL_CACHE_FILE = os.path.join(CACHE_DIR, "diesel_cache.json")
 CACHE_EXPIRATION_SECONDS = 900  # 15 minutes
 
 # Global caches (token -> {"value": ..., "timestamp": ...})
 price_cache = {}
+l1_cache = {}
 market_cache = {}
 diesel_cache = {}
 
 def load_cache():
     """Load caches from JSON files on import"""
-    global price_cache, market_cache
+    global price_cache, l1_cache, market_cache
     os.makedirs(CACHE_DIR, exist_ok=True)
 
     if os.path.exists(PRICE_CACHE_FILE):
@@ -25,6 +29,13 @@ def load_cache():
                 price_cache = json.load(f)
         except Exception as e:
             print(f"⚠️ Failed to load price_cache: {e}")
+
+    if os.path.exists(L1_CACHE_FILE):
+        try:
+            with open(L1_CACHE_FILE, "r") as f:
+                l1_cache = json.load(f)
+        except Exception as e:
+            print(f"⚠️ Failed to load l1_cache: {e}")
 
     if os.path.exists(MARKET_CACHE_FILE):
         try:
@@ -44,6 +55,8 @@ def save_cache():
     try:
         with open(PRICE_CACHE_FILE, "w") as f:
             json.dump(price_cache, f)
+        with open(L1_CACHE_FILE, "w") as f:
+            json.dump(l1_cache, f)
         with open(MARKET_CACHE_FILE, "w") as f:
             json.dump(market_cache, f)
         with open(DIESEL_CACHE_FILE, "w") as f:
@@ -68,6 +81,7 @@ def clear_caches():
             del cache[k]
 
     remove_expired(price_cache)
+    remove_expired(l1_cache)
     remove_expired(market_cache)
     remove_expired(diesel_cache)
     save_cache()

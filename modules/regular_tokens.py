@@ -1,10 +1,10 @@
 """
-Hive Engine Utilities Module
+Hive Engine Regular Tokens Module
 
-Common functions and utilities for interacting with Hive Engine API.
-Used by the Hive Engine Tokens Snapshot tool.
+Mostly logic related to regular Hive Engine tokens.
+Used by Hive Portfolio Tracker tool.
 
-Created by https://peakd.com/@gadrian using "vibe" coding in June 2025.
+Created by https://peakd.com/@gadrian using "vibe" coding in June-July 2025.
 """
 
 import requests
