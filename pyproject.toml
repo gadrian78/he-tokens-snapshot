@@ -1,6 +1,6 @@
 [project]
-name = "my-hive-engine-tokens-snapshot"
-version = "1.54"
+name = "hive-portfolio-tracker"
+version = "1.61"
 requires-python = ">=3.10" # you may try it with a lower version number (that's what I had installed but it could work very well with lower versions)
 
 [build-system]

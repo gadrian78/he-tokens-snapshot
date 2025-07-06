@@ -1,12 +1,50 @@
 #!/bin/bash
 
-# Complete Uninstaller for Hive Portfolio Snapshot Multi-User Setup
+# =============================================================================
+# HIVE PORTFOLIO TRACKER UNINSTALLER
+# =============================================================================
 # This script removes all components installed by the setup script
+# It automatically reads configuration from config.sh
+# =============================================================================
 
-# !! Make sure to update the configuration PATHs and DIRs below !!
+# Load configuration
+CONFIG_FILE="config.sh"
 
-echo "🗑️ Hive Portfolio Snapshot Multi-User Uninstaller"
-echo "================================================="
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "❌ Error: Configuration file '$CONFIG_FILE' not found!"
+    echo "   Please ensure config.sh is in the same directory as this script."
+    exit 1
+fi
+
+echo "📄 Loading configuration from: $CONFIG_FILE"
+source "$CONFIG_FILE"
+
+# Validate required variables
+if [[ -z "$SCRIPT_PATH" || -z "$SNAPSHOTS_BASE_DIR" || -z "$SERVICE_NAME" ]]; then
+    echo "❌ Error: Configuration file is missing required variables!"
+    echo "   Required: SCRIPT_PATH, SNAPSHOTS_BASE_DIR, SERVICE_NAME"
+    exit 1
+fi
+
+echo "✅ Configuration loaded successfully"
+echo
+
+# Derive additional paths from configuration
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+VENV_PATH="$SCRIPT_DIR/venv"
+SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+TIMER_FILE="/etc/systemd/system/$SERVICE_NAME.timer"
+WRAPPER_SCRIPT="/usr/local/bin/${SERVICE_NAME}-runner.sh"
+
+echo "🗑️ Hive Portfolio Snapshot Uninstaller"
+echo "======================================="
+echo
+echo "📋 Configuration Summary:"
+echo "   • Service name: $SERVICE_NAME"
+echo "   • Script path: $SCRIPT_PATH"
+echo "   • Snapshots directory: $SNAPSHOTS_BASE_DIR"
+echo "   • Service files: /etc/systemd/system/$SERVICE_NAME.*"
+echo "   • Wrapper script: $WRAPPER_SCRIPT"
 echo
 echo "⚠️  WARNING: This will completely remove:"
 echo "   • Systemd service and timer files"
@@ -16,18 +54,6 @@ echo "   • All snapshot data and directories"
 echo "   • Script files and parent directories"
 echo
 echo "📁 Locations that will be removed:"
-
-# Configuration - should match the setup script
-SCRIPT_PATH="/home/shared/hive-scripts/he-tokens-snapshot.py"
-SNAPSHOTS_BASE_DIR="/home/shared/portfolio-snapshots"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-VENV_PATH="$SCRIPT_DIR/venv"
-
-# Service and system files
-SERVICE_FILE="/etc/systemd/system/hive-portfolio-multi-snapshot.service"
-TIMER_FILE="/etc/systemd/system/hive-portfolio-multi-snapshot.timer"
-WRAPPER_SCRIPT="/usr/local/bin/hive-portfolio-multi-runner.sh"
-
 echo "   • Service file: $SERVICE_FILE"
 echo "   • Timer file: $TIMER_FILE"
 echo "   • Wrapper script: $WRAPPER_SCRIPT"
@@ -41,7 +67,7 @@ echo "🔍 Checking what's currently installed..."
 items_found=0
 
 # Check systemd files
-if systemctl list-unit-files | grep -q "hive-portfolio-multi-snapshot"; then
+if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
     echo "   ✅ Found systemd service/timer"
     items_found=$((items_found + 1))
 fi
@@ -106,18 +132,18 @@ echo
 # Step 1: Stop and disable systemd services
 echo "🛑 Stopping and disabling systemd services..."
 
-if systemctl is-active --quiet hive-portfolio-multi-snapshot.timer 2>/dev/null; then
-    sudo systemctl stop hive-portfolio-multi-snapshot.timer
+if systemctl is-active --quiet "$SERVICE_NAME.timer" 2>/dev/null; then
+    sudo systemctl stop "$SERVICE_NAME.timer"
     echo "   ✅ Stopped timer"
 fi
 
-if systemctl is-enabled --quiet hive-portfolio-multi-snapshot.timer 2>/dev/null; then
-    sudo systemctl disable hive-portfolio-multi-snapshot.timer
+if systemctl is-enabled --quiet "$SERVICE_NAME.timer" 2>/dev/null; then
+    sudo systemctl disable "$SERVICE_NAME.timer"
     echo "   ✅ Disabled timer"
 fi
 
-if systemctl is-active --quiet hive-portfolio-multi-snapshot.service 2>/dev/null; then
-    sudo systemctl stop hive-portfolio-multi-snapshot.service
+if systemctl is-active --quiet "$SERVICE_NAME.service" 2>/dev/null; then
+    sudo systemctl stop "$SERVICE_NAME.service"
     echo "   ✅ Stopped service"
 fi
 
@@ -177,7 +203,7 @@ echo "📁 Removing script directory..."
 
 if [ -d "$SCRIPT_DIR" ]; then
     # Be careful - only remove if it looks like our directory
-    if [ -f "$SCRIPT_PATH" ] || [ -d "$SCRIPT_DIR/venv" ] || [ "$(basename "$SCRIPT_DIR")" = "hive-scripts" ]; then
+    if [ -f "$SCRIPT_PATH" ] || [ -d "$SCRIPT_DIR/venv" ]; then
         echo "   📋 Script directory contents:"
         ls -la "$SCRIPT_DIR" 2>/dev/null || echo "   (empty or inaccessible)"
         
@@ -203,8 +229,8 @@ fi
 echo "🧹 Final cleanup..."
 
 # Reset failed units
-sudo systemctl reset-failed hive-portfolio-multi-snapshot.service 2>/dev/null || true
-sudo systemctl reset-failed hive-portfolio-multi-snapshot.timer 2>/dev/null || true
+sudo systemctl reset-failed "$SERVICE_NAME.service" 2>/dev/null || true
+sudo systemctl reset-failed "$SERVICE_NAME.timer" 2>/dev/null || true
 
 echo "   ✅ Cleaned up systemd references"
 
@@ -213,7 +239,7 @@ echo "🔍 Verifying removal..."
 
 remaining_items=0
 
-if systemctl list-unit-files | grep -q "hive-portfolio-multi-snapshot"; then
+if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
     echo "   ⚠️  Systemd units still found"
     remaining_items=$((remaining_items + 1))
 fi
