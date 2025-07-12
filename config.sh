@@ -74,7 +74,7 @@ REQUIREMENTS_FILE="requirements.txt"
 # RUNTIME SETTINGS
 # -----------------------------------------------------------------------------
 # Delay between processing different users (seconds)
-DELAY_BETWEEN_USERS_SEC=2
+DELAY_BETWEEN_USERS_SEC=5
 
 # Enable quiet mode for the script (true/false)
 ENABLE_QUIET_MODE=true
