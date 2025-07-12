@@ -166,7 +166,7 @@ def get_market_info(api, market, symbol, retries=3, delay=2, trade_batch_limit=1
             debug_log(f"⚠️ Trades history failed for {symbol} (attempt {attempt + 1}): {e}")
             
             # If trades history fails, try alternative methods
-            if "does not exists" in str(e).lower():
+            if "does not exist" in str(e).lower():
                 debug_log(f"  🔄 Trying alternative price sources for {symbol}...")
                 
                 # Method 1: Try order book data
