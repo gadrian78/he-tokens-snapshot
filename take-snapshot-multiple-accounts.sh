@@ -9,15 +9,15 @@
 # Run script for USERNAME1
 echo "Taking snapshot for account: USERNAME1"
 ./venv/bin/python3 ./take-snapshot.py -u USERNAME1 -t LIST_TOKENS_FOR_USERNAME1 --quiet
-sleep(5)
+sleep 5
 # Run script for USERNAME2
 echo "Taking snapshot for account: USERNAME2"
 ./venv/bin/python3 ./take-snapshot.py -u USERNAME2 -t LIST_TOKENS_FOR_USERNAME2 --quiet
-sleep(5)
+sleep 5
 # Run script for USERNAME3
 echo "Taking snapshot for account: USERNAME3"
 ./venv/bin/python3 ./take-snapshot.py -u USERNAME3 -t LIST_TOKENS_FOR_USERNAME3 --quiet
-#sleep(5) // un-comment if you add more accounts
+#sleep 5 // un-comment if you add more accounts
 
 # Add more or remove the unnecessary as needed based on the number of accounts you want tracked every day.
 # !! Note that the more accounts you track and the longer the list of tokens the more time it takes to process them !!

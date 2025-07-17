@@ -49,7 +49,7 @@ SERVICE_NAME="hive-portfolio-tracker"
 # Service description
 SERVICE_DESCRIPTION="Hive Portfolio Tracker Service"
 
-# What time to run daily (24-hour format: HH:MM:SS)
+# What time to daily (24-hour format: HH:MM:SS)
 RUN_TIME="08:00:00"
 
 # Random delay to avoid server load spikes (seconds, 0-600 = 0-10 minutes)

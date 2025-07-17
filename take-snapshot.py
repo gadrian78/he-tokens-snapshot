@@ -44,6 +44,7 @@ from modules.misc_utils import (
 # Import diesel pool functions
 from modules.diesel_pools import (
     get_user_pool_portfolio,
+    get_required_tokens_for_pools,
     display_diesel_pools_table,
     set_debug_mode
 )
@@ -165,10 +166,6 @@ def create_portfolio_json(token_data, pool_data, layer1_holdings, layer1_values,
                 "staked": token["staked"],
                 "delegated": token["delegated"],
                 "total_amount": token["liquid"] + token["staked"] + token["delegated"],
-                "prices": {
-                    "hive": token["price_hive"],
-                    "usd": token["price_usd"]
-                },
                 "market": {
                     "volume_24h_usd": token["volume_24h_usd"]
                 },
@@ -446,6 +443,11 @@ def main():
                 print(f"❌ Invalid token: {token_msg}")
                 print("   Token must be a valid Hive-Engine token.")
             return
+
+    # add diesel pool tokens to the list of tokens to check on
+    # converting return of addition to a set removes duplicates 
+    diesel_pool_tokens = get_required_tokens_for_pools(ACCOUNT, api)
+    TOKENS = list(set(TOKENS + list(diesel_pool_tokens)))
 
     # Display what we're using
     debug_log(f"🪙 Tokens: {', '.join(TOKENS)}")

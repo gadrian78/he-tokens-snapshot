@@ -1,10 +1,12 @@
-# Hive Portfolio Tracker v1.61
+# Hive Portfolio Tracker v1.65
 
 The basic functionality: takes a snapshot of a list of Hive Engine tokens, all diesel pools, and all layer 1 holdings for a given Hive account.
 
 Advanced functionality: automatically generates and saves snapshots (daily, weekly, monthly, quarterly, yearly) of the data collected to be used further by a separate script. Best to be run automatically (see below).
 
   * The tool has persistent caching and a 15 minutes expiration time to avoid unneccessary calls to APIs.
+
+Note: with a custom setup, I've even tested the shell script that manually take snapshots from multi-accounts on Android.
 
 ## Author
 
@@ -39,7 +41,7 @@ Everything else should work with default settings.
 
 If you don't want `setup.sh` to make Hive Portfolio Tracker run daily based on the settings in config, set `AUTO_SETUP_SERVICE` to `false`, and run `setup-service.sh` when you want it to run automatically, and `stop-automation.sh` when you want it to stop.
 
-Run `setup.sh` after updating `config.sh`. That will set up Python's virtual environment, install dependencies, create some needed directories, and, if `AUTO_SETUP_SERVICE` is true (it is by default), it will set up the tool to run daily.
+Run `setup.sh` AFTER updating `config.sh`. That will set up Python's virtual environment, install dependencies, create some needed directories, and, if `AUTO_SETUP_SERVICE` is true (it is by default), it will set up the tool to run daily.
 
 On default settings, the script should run every morning at 8am or as soon as the computer is turned on and has access to internet after that, for all users in the list and their associated list of tokens (and all the diesel pools and layer 1 holdings).
 
@@ -49,21 +51,23 @@ Daily, weekly, monthly, quarterly and yearly snapshots are saved under the direc
 |-- user1
 |---- daily
 |---- weekly
+|---- ...
 |-- user2 
 |---- daily
 |---- weekly
+|---- ...
 ```
 
 ## Running the Tool Manually
 
 There are different ways to run the Hive Portfolio Tracker manually.
 
-Before I decribe them, note that in the previous section I described the semi-automated way to run it, setting up automation and stopping it at will.
+Before I decribe them, note that in the previous section I described the semi-automated way to run it, by setting up automation and stopping it at will.
 
 Let's see what are the manual ways to use the tool.
 
 First of all, another helper script makes it easy if you want to run the tool on occasions for a list of accounts and associted tokens.
-That is `take-snapshot-multiple-accounts.sh`. Customize it with your own accounts and tokens, and run it when you want!
+That is `take-snapshot-multiple-accounts.sh`. Customize it with your own accounts and tokens, and run it when you want.
 
 If you want to run the tool for one account at a time, the Python script to run is `take-snapshot.py` (used by all other methods above).
 
@@ -82,7 +86,7 @@ If you want a complete uninstallation of Hive Portfolio Tracker, you should use 
 
 The uninstallation script uses the same variables you set in the `config.sh` script, so it should work fine. I tested it on my system and it works - nothing left.
 
-**The script needs your confirmation twice to continue, once at the beginning, and second on removing files. If you want to keep anything (like snapshots), it's advisable to do it before you run the uninstalation script, but certainly before you confirm it.**
+**The script needs your confirmation twice to continue, once at the beginning, and second on removing files. If you want to keep anything (like snapshots), it's advisable to do it before you run the uninstalation script, but certainly before you confirm removing files.**
 
 ## More Info?
 
