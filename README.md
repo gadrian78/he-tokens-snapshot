@@ -6,7 +6,7 @@ Advanced functionality: automatically generates and saves snapshots (daily, week
 
   * The tool has persistent caching and a 15 minutes expiration time to avoid unneccessary calls to APIs.
 
-Note: with a custom setup, I've even tested the shell script that manually takes snapshots from multi-accounts on Android.
+Note: with a custom configuration, I've even tested the shell script that manually takes snapshots from multi-accounts on Android.
 
 ## Author
 
