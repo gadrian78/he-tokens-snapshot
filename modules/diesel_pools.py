@@ -224,6 +224,7 @@ def calculate_pool_token_values(user_shares, pool_info, token_prices):
     """Calculate the underlying token values for user's pool shares"""
     
     if not pool_info or user_shares == 0:
+        debug_log(f"No user_shares or pool_info for pool {pool_info['token_pair']}.")
         return {"base_amount": 0, "quote_amount": 0, "base_value_hive": 0, "quote_value_hive": 0, "total_value_hive": 0}
     
     total_shares = pool_info["total_shares"]
@@ -239,7 +240,7 @@ def calculate_pool_token_values(user_shares, pool_info, token_prices):
     
     base_price_hive = token_prices.get(base_token, 0)
     quote_price_hive = token_prices.get(quote_token, 0)
-    
+
     # Calculate values in HIVE
     base_value_hive = base_amount * base_price_hive
     quote_value_hive = quote_amount * quote_price_hive
@@ -388,6 +389,44 @@ def get_all_diesel_pools(api):
     except Exception as e:
         debug_log(f"❌ Error fetching diesel pools list: {e}")
         return set()
+
+def get_required_tokens_for_pools(account, api):
+    """
+    Get all tokens required for diesel pool calculations for a given account.
+    This allows the main script to fetch all necessary token prices upfront.
+    
+    Args:
+        account (str): Hive username
+        api: Hive Engine API instance
+    
+    Returns:
+        set: Set of token symbols that need price data
+    """
+    debug_log(f"🔍 Discovering required tokens for @{account}'s diesel pools...")
+    
+    required_tokens = set()
+    
+    # Get user's pool holdings
+    pool_holdings = get_diesel_pool_holdings(api, account)
+    
+    if not pool_holdings:
+        debug_log(f"No diesel pool holdings found for @{account}")
+        return required_tokens
+    
+    # For each pool, get the base and quote tokens
+    for token_pair, pool_position in pool_holdings.items():
+        base_token = pool_position.get("base_token")
+        quote_token = pool_position.get("quote_token")
+        
+        if base_token:
+            required_tokens.add(base_token)
+        if quote_token:
+            required_tokens.add(quote_token)
+            
+        debug_log(f"Pool {token_pair}: needs prices for {base_token} and {quote_token}")
+    
+    debug_log(f"✅ Found {len(required_tokens)} unique tokens needed for diesel pools: {sorted(required_tokens)}")
+    return required_tokens
 
 def set_debug_mode(debug_enabled):
     """Set debug mode for this module"""

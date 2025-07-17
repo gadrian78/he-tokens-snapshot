@@ -407,7 +407,6 @@ def create_layer1_json_data(holdings, values, hive_usd, hbd_usd, btc_usd, userna
     return {
         "liquid_hive": {
             "amount": holdings["liquid_hive"],
-            "price_usd": hive_usd,
             "value_usd": values["liquid_hive_usd"],
             "value_hive": holdings["liquid_hive"],
             "value_btc": values["liquid_hive_usd"] / btc_usd if btc_usd > 0 else 0
@@ -416,29 +415,24 @@ def create_layer1_json_data(holdings, values, hive_usd, hbd_usd, btc_usd, userna
             "owned": holdings["hive_power_owned"],
             "delegated_in": holdings["hive_power_delegated_in"],
             "delegated_out": holdings["hive_power_delegated_out"],
-            "effective": holdings["hive_power_effective"],
-            "price_usd": hive_usd,
             "value_usd": values["hive_power_usd"], # hive power owned
             "value_hive": holdings["hive_power_owned"],
             "value_btc": values["hive_power_usd"] / btc_usd if btc_usd > 0 else 0
         },
         "savings_hive": {
             "amount": holdings["savings_hive"],
-            "price_usd": hive_usd,
             "value_usd": values["savings_hive_usd"],
             "value_hive": holdings["savings_hive"],
             "value_btc": values["savings_hive_usd"] / btc_usd if btc_usd > 0 else 0
         },
         "liquid_hbd": {
             "amount": holdings["liquid_hbd"],
-            "price_usd": hbd_usd,
             "value_usd": values["liquid_hbd_usd"],
             "value_hive": holdings["liquid_hbd"] / hive_usd if hive_usd > 0 else 0,
             "value_btc": values["liquid_hbd_usd"] / btc_usd if btc_usd > 0 else 0
         },
         "savings_hbd": {
             "amount": holdings["savings_hbd"],
-            "price_usd": hbd_usd,
             "value_usd": values["savings_hbd_usd"],
             "value_hive": holdings["savings_hbd"] / hive_usd if hive_usd > 0 else 0,
             "value_btc": values["savings_hbd_usd"] / btc_usd if btc_usd > 0 else 0
